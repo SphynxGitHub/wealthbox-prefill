@@ -98,16 +98,37 @@
 
   // api fetch/parse
   async function fetchApi({url,method='GET',headersJson='',bodyJson='',rowPath=''}) {
-    let headers={}; if(headersJson){ try{ headers=JSON.parse(headersJson); }catch(_){ throw new Error('Headers JSON is invalid'); } }
-    let body; if(bodyJson && /^(POST|PUT|PATCH)$/i.test(method)){ try{ body=JSON.stringify(JSON.parse(bodyJson)); if(!headers['Content-Type']) headers['Content-Type']='application/json'; }catch(_){ throw new Error('Body JSON is invalid'); } }
-    const res = await fetch(url,{ method, headers, body });
-    if(!res.ok) throw new Error(`API request failed: ${res.status}`);
-    let json; try{ json=await res.json(); }catch(_){ throw new Error('API did not return JSON'); }
-    const arr = getAtPath(json,rowPath);
-    if(!Array.isArray(arr)) throw new Error(`Row path "${rowPath||'(root)'}" did not resolve to an array`);
-    const headers = inferHeadersFromArray(arr);
-    return { headers, rows: arr.map(normalizeValueObject) };
+    // rename to avoid collision with the "headers" we return later
+    let reqHeaders = {};
+    if (headersJson) {
+      try { reqHeaders = JSON.parse(headersJson); }
+      catch (_) { throw new Error('Headers JSON is invalid'); }
+    }
+  
+    let body;
+    if (bodyJson && /^(POST|PUT|PATCH)$/i.test(method)) {
+      try {
+        body = JSON.stringify(JSON.parse(bodyJson));
+        if (!reqHeaders['Content-Type']) reqHeaders['Content-Type'] = 'application/json';
+      } catch (_) { throw new Error('Body JSON is invalid'); }
+    }
+  
+    const res = await fetch(url, { method, headers: reqHeaders, body });
+    if (!res.ok) throw new Error(`API request failed: ${res.status}`);
+  
+    let json;
+    try { json = await res.json(); }
+    catch (_) { throw new Error('API did not return JSON'); }
+  
+    const arr = getAtPath(json, rowPath);
+    if (!Array.isArray(arr)) throw new Error(`Row path "${rowPath || '(root)'}" did not resolve to an array`);
+  
+    const cols = inferHeadersFromArray(arr);  // <- was "headers" before
+  
+    // Keep the returned property name "headers" the same so the rest of the code works
+    return { headers: cols, rows: arr.map(normalizeValueObject) };
   }
+
   function getAtPath(obj,path){
     if(!path) return obj;
     return path.split('.').reduce((acc,key)=> (acc && acc[key]!==undefined ? acc[key] : undefined), obj);
