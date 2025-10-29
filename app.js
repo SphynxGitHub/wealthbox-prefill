@@ -44,6 +44,78 @@
   const rowPreview=$('rowPreview'), payloadPreview=$('payloadPreview');
   const prefillBtn=$('prefillBtn'), resultBox=$('resultBox');
 
+  // === Read widget settings (editor-side) and configure secrets ===
+  function truthy(v){ return /^(1|true|yes|on)$/i.test(String(v||'')); }
+  
+  let widgetSettings = {};
+  try {
+    widgetSettings = (window.JFCustomWidget && JFCustomWidget.getWidgetSettings)
+      ? (JFCustomWidget.getWidgetSettings() || {})
+      : {};
+  } catch(_) { widgetSettings = {}; }
+  
+  // Prefer settings over local storage if present
+  if (widgetSettings.apiBase)  apiBase = widgetSettings.apiBase;
+  if (widgetSettings.jotformApiKey) {
+    apiKey = widgetSettings.jotformApiKey;           // hide on-form auth UI if set
+    localStorage.setItem('lf_apiKey', apiKey);
+  }
+  const wbSettings = {
+    base:  widgetSettings.wbBase  || 'https://api.crmworkspace.com/v1',
+    token: widgetSettings.wbToken || '',
+    loadContacts:  truthy(widgetSettings.wbLoadContacts),
+    loadHouseholds: truthy(widgetSettings.wbLoadHouseholds),
+  };
+  
+  // Hide the on-form auth controls when keys come from settings
+  (function hideAuthIfKeys(){
+    // Jotform API key row
+    if (widgetSettings.jotformApiKey) {
+      loginBtn && (loginBtn.style.display = 'none');
+      apiKeyIn  && (apiKeyIn.closest('.row')?.style && (apiKeyIn.closest('.row').style.display = 'none'));
+      saveKey   && (saveKey.style.display = 'none');
+    }
+    // Wealthbox add-source row (wrap those inputs in a container with id="wbRow" in your HTML if you want to hide all at once)
+    if (wbSettings.token) {
+      const wbRow = document.getElementById('wbRow'); // optional container you can add in HTML
+      if (wbRow) wbRow.style.display = 'none';
+      // Also pre-fill inputs silently so manual “Add” isn’t required
+      document.getElementById('wbBase')  && (document.getElementById('wbBase').value  = wbSettings.base);
+      document.getElementById('wbToken') && (document.getElementById('wbToken').value = wbSettings.token);
+    }
+  })();
+  
+  // Auto-add or refresh WB sources declared in settings
+  async function ensureWealthboxPresetSources(){
+    if (!wbSettings.token) return; // nothing to do
+    const upsert = async (entity, niceName) => {
+      let s = sources.find(x => x.kind==='wb' && x.wb?.entity===entity);
+      if (!s) {
+        s = { kind:'wb', id: uid(), name: niceName, wb: { baseUrl: wbSettings.base, token: wbSettings.token, entity }, headers:null, rows:null, keyCol:null };
+        sources.push(s);
+        saveSources();
+      } else {
+        s.name = niceName;
+        s.wb.baseUrl = wbSettings.base;
+        s.wb.token   = wbSettings.token;
+      }
+      await loadSourceData(s);
+    };
+  
+    try {
+      if (wbSettings.loadContacts)  await upsert('contacts',  'WB Contacts');
+      if (wbSettings.loadHouseholds)await upsert('households','WB Households');
+      if (!activeSourceId && sources.length) activeSourceId = sources[0].id;
+      renderSourcesDropdown(); renderRowsList(); renderMappingTable(); ok('Wealthbox sources ready.');
+    } catch(e) { err(e.message || 'Failed to load Wealthbox sources from settings.'); }
+  }
+  
+  // Run after widget is ready (and after your existing subscribe('ready', ...) boot)
+  JFCustomWidget.subscribe && JFCustomWidget.subscribe('ready', () => {
+    ensureWealthboxPresetSources();
+  });
+
+
   apiKeyIn && (apiKeyIn.value = apiKey);
   apiBaseSel && (apiBaseSel.value = apiBase);
   if (manualFormIdIn) manualFormIdIn.value = manualFormId;
