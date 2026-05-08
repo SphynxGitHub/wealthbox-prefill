@@ -35,7 +35,7 @@
         }
 
         function complete(mapping) {
-            const firebaseBase = "https://YOUR_REGION-YOUR_PROJECT.cloudfunctions.net/wealthboxBridge";
+            const firebaseBase = "https://wealthboxbridge-4wlwt4ouea-uc.a.run.app";
             
             // We append the specific user's key AND the map to the URL
             const finalHook = `${firebaseBase}?mapping=${encodeURIComponent(JSON.stringify(mapping))}&wbKey=${encodeURIComponent(userWbKey)}`;
