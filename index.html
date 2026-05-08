@@ -1,32 +1,68 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Wealthbox Sync Setup</title>
+    <script src="https://js.jotform.com/JotForm.js"></script>
+    <script src="https://js.jotform.com/JotFormExtensions.js"></script>
+    <style>
+        body { font-family: -apple-system, sans-serif; padding: 20px; color: #2c3345; }
+        h2 { font-size: 18px; margin-bottom: 20px; }
+        input { padding: 8px; border: 1px solid #ced4da; border-radius: 4px; margin-bottom: 10px; }
+        button { 
+            padding: 10px 20px; 
+            background: #ffa500; 
+            color: white; 
+            border: none; 
+            border-radius: 4px; 
+            cursor: pointer; 
+            font-weight: bold;
+        }
+        button:hover { background: #e69500; }
+        #fieldMatcher { margin-top: 20px; border-top: 1px solid #eee; padding-top: 20px; }
+    </style>
+</head>
 <body>
     <h2>Wealthbox Sync Setup</h2>
+    
     <div id="authSection">
         <p>Enter your Wealthbox API Access Token:</p>
         <input type="password" id="userWbKey" placeholder="Paste Token Here" style="width: 300px;">
+        <br>
         <button onclick="startMapping()">Next: Map Fields</button>
     </div>
 
     <div id="mappingSection" style="display:none;">
+        <p>Map your form questions to Wealthbox fields:</p>
         <div id="fieldMatcher"></div>
+        <br>
         <button id="finish">Finish Integration</button>
     </div>
 
     <script>
+        // 1. Capture the form context from the URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const formId = urlParams.get('formId');
+        const apiKey = urlParams.get('apiKey');
         let userWbKey = "";
+
+        // 2. Initialize the Jotform SDK
+        JF.initialize({ apiKey: apiKey });
 
         function startMapping() {
             userWbKey = document.getElementById('userWbKey').value;
             if (!userWbKey) return alert("Please enter a key.");
+            
             document.getElementById('authSection').style.display = 'none';
             document.getElementById('mappingSection').style.display = 'block';
             
-            // Trigger the Jotform Question Mapper
+            // 3. Trigger the Field Matcher Widget
             JF.fieldMatch({
                 el: document.getElementById("fieldMatcher"),
                 targetFields: [
                     { value: "First Name", key: "first_name", type: "control_textbox" },
                     { value: "Last Name", key: "last_name", type: "control_textbox" },
-                    { value: "Email", key: "email", type: "control_email" }
+                    { value: "Email", key: "email", type: "control_email" },
+                    { value: "Phone", key: "phone", type: "control_phone" }
                 ],
                 callback: function(mapping) {
                     document.getElementById('finish').onclick = () => complete(mapping);
@@ -35,14 +71,21 @@
         }
 
         function complete(mapping) {
+            // Your Firebase Function URL
             const firebaseBase = "https://wealthboxbridge-4wlwt4ouea-uc.a.run.app";
             
-            // We append the specific user's key AND the map to the URL
-            const finalHook = `${firebaseBase}?mapping=${encodeURIComponent(JSON.stringify(mapping))}&wbKey=${encodeURIComponent(userWbKey)}`;
+            // Prepare the stateless payload
+            const mapParam = encodeURIComponent(JSON.stringify(mapping));
+            const keyParam = encodeURIComponent(userWbKey);
             
-            JF.createFormWebhook(urlParams.get('formId'), finalHook, function() {
+            const finalHook = `${firebaseBase}?mapping=${mapParam}&wbKey=${keyParam}`;
+            
+            // 4. Create the Webhook and Close the window
+            JF.createFormWebhook(formId, finalHook, function() {
+                alert("Integration Successful!");
                 JF.complete();
             });
         }
     </script>
 </body>
+</html>
