@@ -1,63 +1,48 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Wealthbox Sync Integration</title>
-    <script src="https://js.jotform.com/JotForm.js"></script>
-    <style>
-        body { font-family: sans-serif; padding: 20px; }
-        #fieldMatcher { margin-top: 20px; }
-    </style>
-</head>
 <body>
-    <h2>Connect Jotform to Wealthbox</h2>
-    <div id="fieldMatcher"></div>
-    <button id="finish" style="display:none;">Finish Integration</button>
+    <h2>Wealthbox Sync Setup</h2>
+    <div id="authSection">
+        <p>Enter your Wealthbox API Access Token:</p>
+        <input type="password" id="userWbKey" placeholder="Paste Token Here" style="width: 300px;">
+        <button onclick="startMapping()">Next: Map Fields</button>
+    </div>
+
+    <div id="mappingSection" style="display:none;">
+        <div id="fieldMatcher"></div>
+        <button id="finish">Finish Integration</button>
+    </div>
 
     <script>
-        const urlParams = new URLSearchParams(window.location.search);
-        const formId = urlParams.get('formId');
-        const apiKey = urlParams.get('apiKey');
+        let userWbKey = "";
 
-        JF.initialize({ apiKey: apiKey });
-
-        // These are the Wealthbox fields you want to support
-        const wealthboxFields = [
-            { value: "First Name", key: "first_name", type: "control_textbox", autoMatch: true },
-            { value: "Last Name", key: "last_name", type: "control_textbox", autoMatch: true },
-            { value: "Email", key: "email", type: "control_email", autoMatch: true },
-            { value: "Phone", key: "phone", type: "control_phone", autoMatch: true }
-        ];
-
-        // Launch the Question Mapper (from the myCRM sample)
-        JF.fieldMatch({
-            el: document.getElementById("fieldMatcher"),
-            targetFields: wealthboxFields,
-            callback: function(mapping) {
-                // Show the finish button once they map the fields
-                const btn = document.getElementById('finish');
-                btn.style.display = 'block';
-                btn.onclick = function() {
-                    completeIntegration(mapping);
-                };
-            }
-        });
-
-        function completeIntegration(mapping) {
-            const firebaseHook = "https://YOUR_REGION-YOUR_PROJECT.cloudfunctions.net/wealthboxBridge";
+        function startMapping() {
+            userWbKey = document.getElementById('userWbKey').value;
+            if (!userWbKey) return alert("Please enter a key.");
+            document.getElementById('authSection').style.display = 'none';
+            document.getElementById('mappingSection').style.display = 'block';
             
-            // Register the webhook in Jotform
-            JF.createFormWebhook(formId, firebaseHook, function() {
-                // IMPORTANT: In a stateless setup, we can't save the 'mapping' to a DB.
-                // We will send the mapping info as a URL parameter in the Webhook itself!
-                const mapParam = encodeURIComponent(JSON.stringify(mapping));
-                const finalHook = `${firebaseHook}?mapping=${mapParam}`;
-                
-                // Update the webhook with the mapping included in the URL
-                JF.createFormWebhook(formId, finalHook, function() {
-                    JF.complete(); // Close the window
-                });
+            // Trigger the Jotform Question Mapper
+            JF.fieldMatch({
+                el: document.getElementById("fieldMatcher"),
+                targetFields: [
+                    { value: "First Name", key: "first_name", type: "control_textbox" },
+                    { value: "Last Name", key: "last_name", type: "control_textbox" },
+                    { value: "Email", key: "email", type: "control_email" }
+                ],
+                callback: function(mapping) {
+                    document.getElementById('finish').onclick = () => complete(mapping);
+                }
+            });
+        }
+
+        function complete(mapping) {
+            const firebaseBase = "https://YOUR_REGION-YOUR_PROJECT.cloudfunctions.net/wealthboxBridge";
+            
+            // We append the specific user's key AND the map to the URL
+            const finalHook = `${firebaseBase}?mapping=${encodeURIComponent(JSON.stringify(mapping))}&wbKey=${encodeURIComponent(userWbKey)}`;
+            
+            JF.createFormWebhook(urlParams.get('formId'), finalHook, function() {
+                JF.complete();
             });
         }
     </script>
 </body>
-</html>
